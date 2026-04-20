@@ -1,0 +1,52 @@
+import sys
+
+def filter_fasta(input_file, output_file, min_length, max_length):
+    # Open the input and output files
+    with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
+        # Initialize variables
+        entry_id = None
+        sequence = None
+        
+        
+        # Iterate through the lines in the input file
+        for line in infile:
+            line = line.strip()
+            
+            # If the line starts with '>', it means we are reading an ID line
+            if line.startswith(">"):
+                if entry_id and sequence:
+                    # Check if the current entry meets the filtering criteria
+                    if len(sequence) >= min_length and len(sequence) <= max_length:
+                      outfile.write(f"{entry_id}\n{sequence}\n")
+                    else:
+                      pass
+                
+                # Start a new entry
+                entry_id = line
+                sequence = ""
+                
+            
+            elif line.isalpha():
+                # Add to the sequence
+                sequence += line
+
+        
+        # After the loop, we need to check the last entry
+        if entry_id and sequence:
+            if len(sequence) >= min_length:
+                outfile.write(f"{entry_id}\n{sequence}\n")
+
+if __name__ == "__main__":
+    # Ensure the script is called with the right number of arguments
+    if len(sys.argv) != 5:
+        print("Usage: python generalFilter.py <input.fasta> <output.fasta> <min_length> <max_length>")
+        sys.exit(1)
+
+    # Parse the arguments
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    min_length = int(sys.argv[3])
+    max_length = int(sys.argv[4])
+
+    # Call the filter function
+    filter_fasta(input_file, output_file, min_length, max_length)
