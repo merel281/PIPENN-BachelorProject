@@ -4,11 +4,6 @@
 
 # Credits to Bart Vonk for inspo
 
-# !!!!!!!!
-# Missing Uniprot_id (necessary??), interface
-# later on replace zeros with 1 if interface
-# !!!!!!!!
-
 # argv = argument vector
 # A list of strings that contains everything you typed after python script.py in the terminal
 # What to run in windows cmd:
@@ -86,7 +81,7 @@ def interface(lengths, bindingsites):
     
     for seq_idx, seqLength in enumerate(lengths):
         try:
-            seqLength = int(seqLength)
+            seqLength = int(seqLength) # Turn the value into a number, fails for Rlength, so excludes header
         except ValueError:
             continue
             
@@ -94,10 +89,10 @@ def interface(lengths, bindingsites):
 
         for site in bindingsites[seq_idx]:
             try:
-                pos = int(site[1:])-1
+                pos = int(site[1:])-1 # Only position without amino acid
 
-                if 0<= pos <seqLength:
-                    prediction[pos] = 1
+                if 0<= pos <seqLength: # Makes sure the position fits inside the sequence
+                    prediction[pos] = 1 # Replace 0 with 1
                 else:
                     print(f"Warning: position {pos+1} out of range for sequence length {seqLength}")
 
