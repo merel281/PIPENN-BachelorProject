@@ -28,7 +28,7 @@ def read_input(ClusteredFile):
             if len(parts) < 2:
                 continue
 
-            header = parts[0] # Column 1: PDB ID 4 lowercase charachters
+            header = parts[0] + '-' + parts[1] # Column 1: PDB ID 4 lowercase charachters + receptor chain
             
             sequence = ('"' + ','.join(parts[20]) + '"')
             
