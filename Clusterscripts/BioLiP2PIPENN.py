@@ -4,58 +4,81 @@
 
 # Credits to Bart Vonk for inspo
 
+
 # argv = argument vector
 # A list of strings that contains everything you typed after python script.py in the terminal
 # What to run in windows cmd:
 # python script.py input.fasta output.csv
-from sys import argv 
+from sys import argv
+import os 
 
 def read_input(ClusteredFile):
-    # First row + create lists for next rows
-    headers, sequences, lengths, bindingsites = [["PDB ID"], ["sequence"], ["Rlength"], ["Bindingsites"]]
-    minRlength = 100 # Start values
+
+    # Store unique sequences
+    sequence_data = {}
+
+    minRlength = 100
     maxRlength = 0
 
-    with open(ClusteredFile, 'r') as file: # 'r' open the file in read mode
-        
-        header = None # Starting value before we find the first FASTA header
-        sequence = None
-        length = None
-        binding = None
+    with open(ClusteredFile, 'r') as file:
 
         for line in file:
+
             parts = line.strip().split("\t")
-            if len(parts) < 2:
+
+            if len(parts) < 21:
                 continue
 
-            header = parts[0] + '-' + parts[1] # Column 1: PDB ID 4 lowercase charachters + receptor chain
-            
-            sequence = ('"' + ','.join(parts[20]) + '"')
-            
-            length = (len(parts[20]))
-             # keep track of min, max of sequence length
-            if len(parts[20]) < minRlength:
-                minRlength = len(parts[20])
-            if len(parts[20]) > maxRlength:
-                maxRlength = len(parts[20])
+            header = parts[0] + '-' + parts[1]
 
-            binding = parts[8].split() # list of binding residues
+            raw_sequence = parts[20]
+            sequence = '"' + ','.join(raw_sequence) + '"'
 
+            length = len(raw_sequence)
 
-            #print(header, sequence, prediction, length)
-            if all(var is not None for var in (header, sequence, length)):
-                headers.append(header)
-                sequences.append(sequence)
-                lengths.append(length)
-                bindingsites.append(binding)
+            # Track min/max length
+            if length < minRlength:
+                minRlength = length
 
-                # Empty variables
-                header = None
-                sequence = None
-                length = None
-                binding = None
+            if length > maxRlength:
+                maxRlength = length
 
-    
+            # Binding sites
+            binding = parts[8].split()
+
+            # Sequence already exists
+            if raw_sequence in sequence_data:
+
+                # Existing binding sites
+                existing_binding = sequence_data[raw_sequence]["binding"]
+
+                # Append only new residues; prevent duplicate bindingsites in list
+                for site in binding:
+                    if site not in existing_binding:
+                        existing_binding.append(site)
+
+            else:
+                # New sequence
+                sequence_data[raw_sequence] = {
+                    "header": header,
+                    "sequence": sequence,
+                    "length": length,
+                    "binding": binding
+                }
+
+    # Convert dictionary back to lists
+    headers = ["uniprot_id"]
+    sequences = ["sequence"]
+    lengths = ["Rlength"]
+    bindingsites = ["Bindingsites"]
+
+    for data in sequence_data.values():
+
+        headers.append(data["header"])
+        sequences.append(data["sequence"])
+        lengths.append(data["length"])
+        bindingsites.append(data["binding"])
+
     return headers, sequences, lengths, bindingsites, minRlength, maxRlength
 
 # Function calculate normalized length
@@ -77,7 +100,7 @@ def calc_norm(minRlength, maxRlength, lengths):
 
 # Prediction filled in with zeros; length equal to sequence length
 def interface(lengths, bindingsites):
-    interface_0 = ["interface_zeros"]
+    interface_0 = ["n_interface"]
     
     for seq_idx, seqLength in enumerate(lengths):
         try:
@@ -89,16 +112,17 @@ def interface(lengths, bindingsites):
 
         for site in bindingsites[seq_idx]:
             try:
-                pos = int(site[1:])-1 # Only position without amino acid
+                pos = int(site[1:])-1 # Only position without aminoacid
 
                 if 0<= pos <seqLength: # Makes sure the position fits inside the sequence
-                    prediction[pos] = 1 # Replace 0 with 1
+                    prediction[pos] = 1 # replace 0 with 1
                 else:
                     print(f"Warning: position {pos+1} out of range for sequence length {seqLength}")
 
             except ValueError:
                 print(f"Invalid binding site format: {site}")
-        
+
+        # Convert list to string
         thing = ','.join([str(x) for x in prediction])
         use = f'"{thing}"'
         
@@ -116,11 +140,12 @@ def write_csv(OutData, csvFile):
 
 def main():
     # If no input and/or output files are mentioned in command line
-    if len(argv) < 3:
-        print("Usage: python script.py input.fasta output.csv")
+    if len(argv) < 2:
+        print("Usage: python script.py ClusBio*.txt")
         exit()    
     # Sets variables from command line, input and output files
-    ClusteredFile, csvFile = argv[1], argv[2]   
+    ClusteredFile = argv[1]
+    csvFile = os.path.splitext(ClusteredFile)[0] + "2.csv"
     # collects all data from the input file
     print("collecting data from input file")
 
