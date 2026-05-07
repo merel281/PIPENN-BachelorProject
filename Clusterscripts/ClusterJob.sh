@@ -1,8 +1,7 @@
 #!/bin/bash
-# CLusters fasta file and removes ZK-488 proteins from clustered database
+# CLusters fasta file and removes proteins in test file from clustered database
 # input file is in fasta format
-# line 90-111 only if ZK-488 proteins are removed from database
-# line 93 make sure filename corresponds with input file
+# uncomment line 134 for nucleotides
 
 
 # e -> exit immediately if any command fails
@@ -22,20 +21,19 @@ if [ "$#" -ne 2 ]; then
 fi
 
 # absolute path of the script's folder
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE_DIR="$(dirname "$SCRIPT_DIR")"
+JOB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$JOB_DIR")"
 
 # Create files and directories
 # -p prevents errors if folder already exists
 # Files from in between steps will be stored here + output file
-DATA_DIR="$BASE_DIR/data"
-IN_DIR="$BASE_DIR/input"
-OUT_DIR="$BASE_DIR/output"
+DATA_DIR="$BASE_DIR/data/p-to-e"
+IN_DIR="$DATA_DIR/input"
+OUT_DIR="$DATA_DIR/output"
 TMP_DIR="$DATA_DIR/tmp"
+SCRIPT_DIR="$BASE_DIR/scripts"
 
-mkdir -p "$DATA_DIR"
-mkdir -p "$OUT_DIR"
-mkdir -p "$TMP_DIR"
+mkdir -p "$IN_DIR" "$OUT_DIR" "$TMP_DIR"
 
 
 echo "Cleaning input format"
@@ -48,7 +46,7 @@ echo "Filtering sequences"
 python "$SCRIPT_DIR/generalFilter.py" \
     "$DATA_DIR/RAW.fasta" \
     "$DATA_DIR/filtered.fasta" \
-    26 2000
+    26 1024
 
 echo "Removing duplicates"
 # remove identical sequences; input: filtered fasta; output: deduplicated.fasta
@@ -65,7 +63,7 @@ cp "$DATA_DIR/deduplicated.fasta" "$DATA_DIR/precluster.fasta"
 # Deletes the entire tmp directory and everything inside it
 rm -rf "$TMP_DIR" # rm = remove; -r=  recursive (delete folder + all contents); -f = force (no prompts, ignore missing files) 
 # Create a fresh, empty tmp directory
-mkdir -p "$TMPDIR" # mkdir = make directory; -p= create parent dirs if needed, don't error if it exists
+mkdir -p "$TMP_DIR" # mkdir = make directory; -p= create parent dirs if needed, don't error if it exists
 
 # Cluster data with the use of MMSeqs
 # Create a subshell with (...) -> module load stay local
@@ -90,10 +88,10 @@ mkdir -p "$TMPDIR" # mkdir = make directory; -p= create parent dirs if needed, d
     #!This part only if ZK-448 proteins are removed (nucleotides and metals)
     echo "removing mapped clusters"
     # extract 2nd column of ZK-488_*.csv and skip the header
-    tail -n +2 "$IN_DIR/ZK-448/ZK-448_nucleotides.csv" | cut -d',' -f2 > pdb_ZK448.txt
+    tail -n +2 "$DATA_DIR/testsets/idlist.txt" | cut -d',' -f2 > test_ids.txt
     python "$SCRIPT_DIR/eliminateClusters.py" \
-     "$DATA_DIR/clusterRes_all_seqs.fasta" \
-     pdb_ZK488.txt\
+    "$DATA_DIR/clusterRes_all_seqs.fasta" \
+     test_ids.txt \
      "$DATA_DIR/filtered_mapped.fasta" 
 
     echo 'Fetching representatives'
@@ -101,7 +99,7 @@ mkdir -p "$TMPDIR" # mkdir = make directory; -p= create parent dirs if needed, d
     # Output clusterRes2_* = final clustered dataset
     mmseqs easy-linclust \
         "$DATA_DIR/filtered_mapped.fasta" \
-       "$DATA_DIR/clusterRes2" \
+        "$DATA_DIR/clusterRes2" \
         "$DATA_DIR/tmp" \
         --min-seq-id 0.25 --cov-mode 1 -c 0.9
         
@@ -125,26 +123,30 @@ else
 fi
 
 # All sequences grouped into final clusters
-cp "$FINAL_ALL" "$OUT_DIR/finalclus.fasta"
+cp "$FINAL_ALL" "$DATA_DIR/finalclus.fasta"
 # Contains one representative per cluster -> non-redundant dataset
-cp "$FINAL_REP" "$OUT_DIR/final.fasta"
+cp "$FINAL_REP" "$DATA_DIR/final.fasta"
 
 echo "Set fasta to BioLip"
 python "$SCRIPT_DIR/fasta2BioLiP.py" \
-  "$OUT_DIR/final.fasta" \
-  "$IN_DIR/$2"
+  "$DATA_DIR/final.fasta" \
+  "$IN_DIR/$2" 
+#  "$IN_DIR/BioLiP_RNA.txt"
 
-# Output is final2.0.csv
+
+# Output is final2.csv
 echo "Set dataset to PIPENN format"
 python "$SCRIPT_DIR/BioLiP2PIPENN.py" \
-  "$OUT_DIR/final.csv"
+  "$DATA_DIR/final.csv" && echo "done"
 
-echo "Splits in training and test set"
-python "$SCRIPT_DIR/split7030.py" "$OUT_DIR/final2.csv"
+#echo "Splits in training and test set"
+#python "$SCRIPT_DIR/split7030.py" "$DATA_DIR/final2.csv"
 
-echo "Copy output to Reza file"
-mkdir -p "$DATA_DIR/Reza"
+mkdir -p "$DATA_DIR/training"
+cp "$DATA_DIR/final2.csv" "$DATA_DIR/training/prepared_biolip_win_e_training.csv"
 
-cp "$OUT_DIR/final2_training.csv" "$OUT_DIR/Reza/prepared_biolip_win_n_training.csv"
-cp "$OUT_DIR/final2_testing.csv" "$OUT_DIR/Reza/prepared_biolip_win_n_testing.csv"
+#echo "Copy output to Reza file"
+#mkdir -p "$DATA_DIR/Reza"
 
+#cp "$DATA_DIR/final2_training.csv" "$OUT_DIR/prepared_biolip_win_e_training.csv"
+#cp "$DATA_DIR/final2_testing.csv" "$OUT_DIR/prepared_biolip_win_e_testing.csv"
