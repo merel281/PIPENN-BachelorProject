@@ -1,0 +1,146 @@
+#Layout original testfile (peptide):
+#seq	label
+#MGSSEQELKAIVKDLGCGPYFLGTYDKRFPGFVSPHKLACAIVNTAGRETGGVHWMAFAWNPRSKTCYLFEPFGFSDQRLKQVYQFEYESLLRRSAIASSPDRCITLEKSTQSVQGPNSAACGLFCCMFLHAFANWPQTPMDHNPTMNLITGVPNSMLNSPQVQPTLRRNQEQLYSFLERHSPYFRSHSAQIRSATSFCHLKNM	000000000000000000000000000000000000000000000000000000000000000000000000000010000000000110001001100000111111111101000000000000000000000000001100001001010000000000000000000000000000000000000000000000000000
+#ADVPAGVQLADKQTLVRNNGSEVQSLDPHKIEGVPESNVSRDLFEGLLISDVEGHPSPGVAEKWENKDFKVWTFHLRENAKWSDGTPVTAHDFVYSWQRLADPNTASPYASYLQYGHIANIDDIIAGKKPATDLGVKALDDHTFEVTLSEPVPYFYKLLVHPSVSPVPKSAVEKFGDKWTQPANIVTNGAYKLKNWVVNERIVLERNPQYWDNAKTVINQVTYLPISSEVTDVNRYRSGEIDMTYNNMPIELFQKLKKEIPNEVRVDPYLCTYYYEINNQKAPFNDVRVRTALKLALDRDIIVNKVKNQGDLPAYSYTPPYTDGAKLVEPEWFKWSQQKRNEEAKKLLAEAGFTADKPLTFDLLYNTSDLHKKLAIAVASIWKKNLGVNVNLENQEWKTFLDTRHQGTFDVARAGWCADYNEPTSFLNTMLSDSSNNTAHYKSPAFDKLIADTLKVADDTQRSELYAKAEQQLDKDSAIVPVYYYVNARLVKPWVGGYTGKDPLDNIYVKNLYIIKH	0000000000000000000000000000000111001000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000111000000000000000000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000101111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+
+
+
+# argv = argument vector
+# A list of strings that contains everything you typed after python script.py in the terminal
+# What to run in windows cmd:
+# python script.py testfile(wrong format) biolip
+
+from sys import argv
+
+def read_input(TestFile):
+    # First row + create lists for next rows
+    sequences, raw_sequences, lengths, bindingsites = [["sequence"], [], ["Rlength"], ["e_interface"]]
+    minRlength = 100 # Start values
+    maxRlength = 0
+
+    with open(TestFile, 'r') as file: # 'r' open the file in read mode
+        
+        sequence = None
+        length = None
+        binding = None
+        raw_seq = None
+        
+        next(file) # skip header
+
+        for line in file:
+            parts = line.strip().split("\t")
+            if len(parts) < 2:
+                continue
+            
+            raw_seq = parts[0].strip()
+            sequence = ('"' + ','.join(parts[0]) + '"')
+            
+            length = (len(parts[0]))
+             # keep track of min, max of sequence length
+            if len(parts[0]) < minRlength:
+                minRlength = len(parts[0])
+            if len(parts[0]) > maxRlength:
+                maxRlength = len(parts[0])
+
+            binding = parts[1] # binary string including interfaces and non interfaces
+
+
+            #print(header, sequence, prediction, length)
+            if all(var is not None for var in (sequence, length, binding)):
+                sequences.append(sequence)
+                raw_sequences.append(raw_seq)
+                lengths.append(length)
+                bindingsites.append(binding)
+
+                # Empty variables
+                sequence = None
+                length = None
+                binding = None
+                raw_seq = None
+
+    
+    return sequences, raw_sequences, lengths, bindingsites, minRlength, maxRlength
+
+# Function calculate normalized length
+def calc_norm(minRlength, maxRlength, lengths):
+    # this function calculates the normalized length for every sequence length in the list 'lengths'
+    normalized = ["normalized_length"]
+    for seqLength in lengths[1:]:
+        # list starts one index later due to the fact the first index is the column header
+        aaNormList = []
+        for i in range(seqLength):
+            #aaNormList.append((seqLength - minRlength) / float(maxRlength - minRlength))
+            aaNormList.append((seqLength - minRlength) / float(2050 - minRlength))
+        thing = ','.join([str(x) for x in aaNormList])
+        use = '"' + thing + '"'
+        normalized.append(use)
+    return normalized
+
+def header(raw_sequences):
+    # find raw sequences in BioLip file and match uniprot_id
+    biolip = argv[2]
+    
+    seq_to_uniprot = {}
+    
+    with open(biolip, "r") as f:
+      for line in f:
+        cols = line.rstrip("\n").split("\t")
+        
+        if len(cols) <18:
+          continue
+        try:
+          sequence = cols[-1].strip() # sequence column
+          pdb_id = cols[0].strip() # pdb id column
+          chain = cols[1].strip() # receptor chain column
+          
+          seq_to_uniprot[sequence] = pdb_id+ '-' + chain
+        except IndexError:
+          continue
+    
+    header = ["uniprot_id"]
+    
+    for sequence in raw_sequences:
+      header.append(seq_to_uniprot.get(sequence, None))
+      
+    
+    return header
+
+    
+def write_csv(OutData, csvFile):
+    # function for rewriting FASTA data into csv format
+    # all parsed information from the input file is found in 'fastaData', while 'csvFile' contains the name of the new csv file
+    with open(csvFile, 'w') as file:
+        for i in range(len(OutData[0])):
+            row = [str(OutData[j][i]) for j in range(len(OutData))]
+            file.write(','.join(row) + '\n')
+
+def main():
+    # If no input and/or output files are mentioned in command line
+    if len(argv) < 2:
+        print("Usage: python script.py Dataset1_test.tsv Biolip_peptides")
+        exit()    
+    # Sets variables from command line, input and output files
+    TestFile = argv[1]
+    csvFile = "../data/p-to-e/testsets/TE125.csv"
+    # collects all data from the input file
+    print("collecting data from input file")
+
+    sequences, raw_sequences, lengths, bindingsites, minRlength, maxRlength = read_input(TestFile)
+    # Only keep list columns for write_csv
+    OutData = [sequences, lengths, bindingsites]
+    
+    # Find corresponding header
+    OutData.append(header(raw_sequences))
+
+    # adds column of normalized lengths
+    OutData.append(calc_norm(minRlength, maxRlength, OutData[1]))
+    
+    # writes the collected and formatted data to csv
+    print("writing output data in PIPENN format")
+    write_csv(OutData, csvFile)
+
+
+# Run code
+main()
+
+
