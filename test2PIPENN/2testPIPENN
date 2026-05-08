@@ -1,0 +1,119 @@
+#Layout original testfile (nucleotide):
+#>5dv7_C
+#MNALMRLNQLKPGLQYKLISQTGPVHAPIFTMSVEVDGSNFEASGPSKKTAKLHVAVKVLQDMGLPILTKHGKNPVMELNEKRRGLKYELISETGGSHDKRFVMEVEVDGQKFQGAGSNKKVAKAYAALAALEKLFP
+#01011000100000000000000000000000000000000000000000000000000000000000000001011001000000000000000111000100000000000000001110000000000000000
+#>5gan_D
+#ASVLLPQLRTGWHVDQAIVTETKRLVVIRFGRKNDRQCMIMDELLSSIAERVRNFAVIYLCDIDEVSDFDEMYELTDPMTVMFFYHNKHMMCDFGTGNNNKLNFIVDDKQEMIDILETIFRGARKNKGLVVSPYDYNHKR
+#00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001010000000000000000000000000001011100000001001
+from Bio import SeqIO
+from sys import argv
+
+def read_input(TestFile):
+  # First row + create lists for next rows
+  headers, sequences, lengths, bindingsites = [["uniprot_id"],["sequence"], ["Rlength"], ["n_interface"]]
+  
+  minRlength = 100 # Start values
+  maxRlength = 0
+
+  with open(TestFile, 'r') as file: # 'r' open the file in read mode
+    header = None
+    sequence = None
+    length = None
+    raw_binding = None
+    binding = None
+    
+    lines = iter(file) # one line at a time and control reading the file; necessary because 3 lines become 1
+    for line in lines:
+      parts = line.strip()
+      
+      if not line.startswith(">"):
+        continue
+        
+      header = line[1:].strip()
+      raw_sequence = next(lines).strip()
+      raw_binding = next(lines).strip() # binary string including interfaces and non interfaces
+      binding = ('"' + ','.join(raw_binding) + '"')
+      
+      
+      if len(parts) < 2:
+        continue
+      
+      sequence = ('"' + ','.join(raw_sequence) + '"')
+      
+      length = (len(raw_sequence))
+      # Track min/max length
+      if length < minRlength:
+          minRlength = length
+
+      if length > maxRlength:
+          maxRlength = length
+
+      #print(header, sequence, prediction, length)
+      if all(var is not None for var in (header, sequence, length, binding)):
+        headers.append(header)
+        sequences.append(sequence)
+        lengths.append(length)
+        bindingsites.append(binding)
+
+        # Empty variables
+        header = None
+        sequence = None
+        length = None
+        raw_binding = None
+        binding = None
+        raw_sequnece = None
+
+  
+    return headers,sequences, lengths, bindingsites, minRlength, maxRlength
+    
+# Function calculate normalized length
+def calc_norm(minRlength, maxRlength, lengths):
+    # this function calculates the normalized length for every sequence length in the list 'lengths'
+    normalized = ["normalized_length"]
+    for seqLength in lengths[1:]:
+        # list starts one index later due to the fact the first index is the column header
+        aaNormList = []
+        for i in range(seqLength):
+            #aaNormList.append((seqLength - minRlength) / float(maxRlength - minRlength))
+            aaNormList.append((seqLength - minRlength) / float(2050 - minRlength))
+        thing = ','.join([str(x) for x in aaNormList])
+        use = '"' + thing + '"'
+        normalized.append(use)
+    return normalized
+
+
+    
+def write_csv(OutData, csvFile):
+    # function for rewriting FASTA data into csv format
+    # all parsed information from the input file is found in 'fastaData', while 'csvFile' contains the name of the new csv file
+    with open(csvFile, 'w') as file:
+        for i in range(len(OutData[0])):
+            row = [str(OutData[j][i]) for j in range(len(OutData))]
+            file.write(','.join(row) + '\n')
+
+def main():
+    # If no input and/or output files are mentioned in command line
+    if len(argv) < 2:
+        print("Usage: python script.py ClusBio*.txt")
+        exit()    
+    # Sets variables from command line, input and output files
+    TestFile = argv[1]
+    csvFile = "../data/p-to-n/testsets/DNA129.csv"
+    # collects all data from the input file
+    print("collecting data from input file")
+
+    headers, sequences, lengths, bindingsites, minRlength, maxRlength = read_input(TestFile)
+    # Only keep list columns for write_csv
+    OutData = [headers, sequences, lengths, bindingsites]
+
+    # adds column of normalized lengths
+    OutData.append(calc_norm(minRlength, maxRlength, OutData[2]))
+
+    
+    # writes the collected and formatted data to csv
+    print("writing output data in PIPENN format")
+    write_csv(OutData, csvFile)
+
+
+# Run code
+main()
